@@ -161,7 +161,7 @@ let pt=null,rad=1.5,baseZ=22,lock=true,exact=false,magic=false,reachPct=100,size
 const ptAt=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/cs,y:(e.clientY-r.top)/cs}};
 const ok=i=>!fill[i]&&(magic||tgt[i]===cur); // can the brush paint this cell right now?
 // a neighbour "closes" a cell when it is off the grid, another colour, or already painted
-const wall=(x,y,c)=>{if(x<0||y<0||x>=W||y>=H)return true;const i=y*W+x;return tgt[i]!==c||fill[i]===1};
+const wall=(x,y,c)=>{if(x<0||y<0||x>=W||y>=H)return true;const i=y*W+x;return fill[i]===1||(!magic&&tgt[i]!==c)};
 function tidy(bx,by,R){ // fill one-cell slivers: gaps between painted cells / colour edges, and dead ends
  for(let pass=0;pass<3;pass++){let ch=false;
   for(let y=by-R;y<=by+R;y++)for(let x=bx-R;x<=bx+R;x++){
@@ -182,11 +182,13 @@ function brush(fx,fy){
   const d=(x+.5-fx)**2+(y+.5-fy)**2;if(d<=bd){bd=d;best=i}}
  if(best<0)return false;
  setCell(best);
- rad=Math.max(1,Math.min(2,rad+(Math.random()-.5)*.5)); // patch radius drifts smoothly between 1 and 2 cells
- const r=rad*sizePct/100,bx=best%W,by=best/W|0,P=Math.ceil(r);
- for(let dy=-P;dy<=P;dy++)for(let dx=-P;dx<=P;dx++){
-  if(dx*dx+dy*dy>r*r)continue;const x=bx+dx,y=by+dy;
-  if(x<0||y<0||x>=W||y>=H)continue;const i=y*W+x;if(ok(i))setCell(i);
+ // patch radius drifts smoothly between 1 and 2 cells (more slowly for the magic brush, whose round edge shows)
+ rad=Math.max(1,Math.min(2,rad+(Math.random()-.5)*(magic?.12:.5)));
+ // magic brush centres the patch on the pointer itself, so the edge is a true circle instead of snapping to cell centres
+ const r=rad*sizePct/100,ox=magic?fx:best%W+.5,oy=magic?fy:(best/W|0)+.5,bx=Math.floor(ox),by=Math.floor(oy),P=Math.ceil(r);
+ for(let y=by-P-1;y<=by+P+1;y++)for(let x=bx-P-1;x<=bx+P+1;x++){
+  if(x<0||y<0||x>=W||y>=H)continue;const dx=x+.5-ox,dy=y+.5-oy;
+  if(dx*dx+dy*dy>r*r)continue;const i=y*W+x;if(ok(i))setCell(i);
  }
  if(r>=1)tidy(bx,by,P+1);
  return true;
