@@ -31,9 +31,9 @@ input[type=range]{width:100%;accent-color:var(--ac)}
 #pulse{position:absolute;border:3px solid #ff2d6f;border-radius:4px;pointer-events:none;animation:p .6s ease-in-out 5 alternate;z-index:2}
 @keyframes p{from{transform:scale(1);opacity:1}to{transform:scale(1.9);opacity:.35}}
 @media (prefers-reduced-motion:reduce){#pulse{animation:none}}
-#modal{position:fixed;inset:0;background:rgba(8,10,16,.72);display:none;overflow:auto;padding:20px;z-index:9}
-#modal>div{background:var(--card);border-radius:14px;max-width:760px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:14px}
-#modal img{max-width:100%;image-rendering:pixelated;border:1px solid var(--bd);border-radius:6px;background:#fff}
+#modal,#gal{position:fixed;inset:0;background:rgba(8,10,16,.72);display:none;overflow:auto;padding:20px;z-index:9}
+#modal>div,#gal>div{background:var(--card);border-radius:14px;max-width:760px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+#modal img,#gal img{max-width:100%;image-rendering:pixelated;border:1px solid var(--bd);border-radius:6px;background:#fff}
 .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}.res figure{margin:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 figcaption{font-size:13px;color:var(--mut)}
 @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}#side{border-right:0;border-bottom:1px solid var(--bd);max-height:38vh}}
@@ -41,8 +41,14 @@ figcaption{font-size:13px;color:var(--mut)}
 .g{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mut)}.pair{display:flex;gap:10px;align-items:center}.pair input[type=range]{flex:1;min-width:0}
 input[type=number]{width:74px;font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg)}
 .chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--fg);cursor:pointer}.chk input{accent-color:var(--ac)}
+#gal{z-index:8}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{border:1px solid var(--bd);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.card img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff}.card b{overflow-wrap:anywhere}.card small{color:var(--mut)}
+.card .row2{display:flex;gap:6px}.card button{flex:1;padding:6px 8px;font-size:13px}
+#nm{font:inherit;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg);width:100%}
 </style></head><body>
-<header><b>Paint by Pixel</b><span>Turn any image into a numbered pixel painting</span></header>
+<header><b>Paint by Pixel</b><span>Turn any image into a numbered pixel painting</span><button id="gb" style="margin-left:auto">Gallery</button></header>
 <main>
 <aside id="side"></aside>
 <section id="area">
@@ -51,6 +57,7 @@ input[type=number]{width:74px;font:inherit;padding:6px 8px;border:1px solid var(
  <div id="pal" hidden></div>
 </section></main>
 <div id="modal"><div id="mbody"></div></div>
+<div id="gal"><div id="gbody"></div></div>
 <script>
 const $=s=>document.querySelector(s),cv=$('#cv'),cx=cv.getContext('2d');
 let src=null,W=0,H=0,K=12,merge=5,size=40,pal=[],tgt,fill,hist=[],rem=[],cur=0,tool='brush',cs=22,mode='setup',last=-1,down=false;
@@ -193,6 +200,8 @@ function skipAll(){ // fill everything that is left, most-used color first, then
  if(!tgt)return;
  for(let c=0;c<pal.length;c++)for(let i=0;i<W*H;i++)if(tgt[i]===c&&!fill[i]){fill[i]=1;hist.push(i);rem[c]--}
  if(mode==='paint'){draw();updPal();const b=$('#bar i');if(b)b.style.width='100%';const n=$('#cnt');if(n)n.textContent=`${W*H} / ${W*H} cells`}
+ if(!curId){curId=uid();createdAt=Date.now();pName=defName()}
+ if(!viewing)savePainting();
  finish();
 }
 function paint(i){
@@ -202,7 +211,8 @@ function paint(i){
 }
 function after(){
  updPal();$('#bar i').style.width=(100*hist.length/(W*H))+'%';$('#cnt').textContent=`${hist.length} / ${W*H} cells`;
- if(hist.length===W*H){setTimeout(finish,300);return}
+ if(hist.length===W*H){if(!viewing)savePainting();setTimeout(finish,300);return}
+ if(!viewing)touch();
  if(rem[cur]===0){const n=pal.findIndex((_,k)=>rem[(cur+1+k)%pal.length]>0);select((cur+1+n)%pal.length)}
 }
 function select(n){cur=n;updPal();if(mode==='paint')draw()}
@@ -259,7 +269,7 @@ function side(){
  <div class="g"><span>Detail: cells on the longest side</span><div class="pair"><input id="sz" type="range" min="8" max="512" value="${size}"><input id="szn" type="number" min="8" max="512" value="${size}"></div></div>
  <div class="g"><span>Max colors: an upper limit, similar shades are merged</span><div class="pair"><input id="kc" type="range" min="2" max="128" value="${K}"><input id="kcn" type="number" min="2" max="128" value="${K}"></div></div><div class="g"><span>Color combining: higher merges more distant colors, lower only the most similar. 0 keeps as many colors as the max allows.</span><div class="pair"><input id="mg" type="range" min="0" max="30" value="${merge}"><input id="mgn" type="number" min="0" max="30" value="${merge}"></div></div><small id="kinfo" style="color:var(--fg)"></small>
  <button class="pri" id="go" ${src?'':'disabled'}>Start painting</button><button id="skip0" ${src?'':'disabled'}>Skip painting: show finished image</button><small style="color:var(--mut)">The preview updates when you release a slider or press Enter in a number box. More detail means more cells to paint.</small>`;
- else s.innerHTML=`<div class="tools"><button id="t1" class="${tool=='brush'?'on':''}">Brush</button><button id="t2" class="${tool=='fill'?'on':''}">Fill</button><button id="t3">Hint</button></div>
+ else s.innerHTML=`<input id="nm" type="text" maxlength="60" placeholder="Name this painting"><small id="svd" style="color:var(--mut)"></small><div class="tools"><button id="t1" class="${tool=='brush'?'on':''}">Brush</button><button id="t2" class="${tool=='fill'?'on':''}">Fill</button><button id="t3">Hint</button></div>
  <label class="chk"><input id="ex" type="checkbox" ${exact?'checked':''}>Exact brush: only the cell under the cursor</label><label class="chk"><input id="mc" type="checkbox" ${magic?'checked':''}>Magic brush: paint each cell in its own color, whatever is selected</label><label class="row"><span>Brush reach: <b id="rv">${reachPct}</b>%</span><input id="rs" type="range" min="0" max="100" value="${reachPct}"></label><label class="row"><span>Brush size: <b id="zv">${sizePct}</b>%</span><input id="zs" type="range" min="0" max="300" value="${sizePct}"></label><small style="color:var(--mut)">Pick a number, then drag near cells with that number. Brush paints the closest matching cell plus a small patch around it, and fills one-cell gaps at edges. Turn on Exact brush to paint only the cell directly under the cursor. Fill paints a whole connected area. With the zoom lock on, zooming out to half the starting zoom or less shows unpainted cells as white and turns painting off.</small><div id="msg" style="min-height:1.2em;color:var(--ac)"></div>
  <label class="row"><span>Zoom</span><input id="zm" type="range" min="1" max="${maxZ()}" value="${cs}"></label>
  <label class="chk"><input id="lk" type="checkbox" ${lock?'checked':''}>Lock painting when zoomed out</label>
@@ -267,15 +277,16 @@ function side(){
  if(mode==='setup'){
   $('#f').onchange=e=>e.target.files[0]&&load(e.target.files[0]);$('#smp').onclick=sample;
   link('#sz','#szn',8,512,v=>size=v);link('#kc','#kcn',2,128,v=>K=v);link('#mg','#mgn',0,30,v=>merge=v);$('#skip0').onclick=skipAll;
-  $('#go').onclick=()=>{mode='paint';cur=0;last=-1;cs=Math.min(maxZ(),Math.max(14,Math.min(32,Math.floor(900/W))));baseZ=cs;side();buildPal();draw();after()};
+  $('#go').onclick=()=>{curId=uid();createdAt=Date.now();pName=defName();viewing=false;startPaint()};
  }else{
   $('#t1').onclick=()=>{tool='brush';side()};$('#t2').onclick=()=>{tool='fill';side()};$('#t3').onclick=hint;
   $('#zm').oninput=e=>{cs=+e.target.value;draw()};
   $('#lk').onchange=e=>{lock=e.target.checked;draw()};
+  $('#nm').value=pName;$('#nm').oninput=e=>{pName=e.target.value;touch()};$('#svd').textContent=savedMsg;
   $('#ex').onchange=e=>{exact=e.target.checked};$('#mc').onchange=e=>{magic=e.target.checked};
   $('#rs').oninput=e=>{reachPct=+e.target.value;$('#rv').textContent=reachPct};$('#zs').oninput=e=>{sizePct=+e.target.value;$('#zv').textContent=sizePct};$('#skip').onclick=skipAll;
   $('#fit').onclick=()=>{const w=$('#wrap');cs=Math.max(1,Math.min(maxZ(),Math.floor(Math.min((w.clientWidth-32)/W,(w.clientHeight-32)/H))));draw();$('#zm').value=cs;$('#pulse').hidden=true;w.scrollTo(0,0);drawVisible()};
-  $('#bk').onclick=()=>{mode='setup';$('#pal').hidden=true;side();convert()};
+  $('#bk').onclick=()=>{flushSave();toSetup()};
  }
 }
 function load(f){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{src=im;mode='setup';$('#pal').hidden=true;side();convert()};im.src=r.result};r.readAsDataURL(f)}
@@ -289,6 +300,82 @@ function sample(){
 }
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))load(f)});
+
+/* ---------- saving + gallery (IndexedDB, stays in this browser) ---------- */
+let curId=null,createdAt=0,pName='',saveT=0,savedMsg='',viewing=false,galList=[],galTab='paused',delArm=null;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmt=t=>new Date(t).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+const defName=()=>'Painting '+fmt(Date.now());
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const idb=new Promise((res,rej)=>{try{const q=indexedDB.open('pixelpaint',1);
+ q.onupgradeneeded=()=>{q.result.createObjectStore('meta',{keyPath:'id'});q.result.createObjectStore('data',{keyPath:'id'})};
+ q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);q.onblocked=()=>rej(new Error('blocked'))}catch(e){rej(e)}});
+idb.catch(()=>{});
+function dbRun(names,mode,fn){return idb.then(db=>new Promise((res,rej)=>{
+ const t=db.transaction(names,mode);let r;
+ try{r=fn(...names.map(n=>t.objectStore(n)))}catch(e){rej(e);return}
+ t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('aborted'))}))}
+function thumb(){
+ const k=192/Math.max(W,H),sc=k>=1?Math.floor(k):k,dw=Math.max(1,Math.round(W*sc)),dh=Math.max(1,Math.round(H*sc)),c=document.createElement('canvas');c.width=dw;c.height=dh;const g=c.getContext('2d');
+ for(let y=0;y<H;y++){const y0=Math.round(y*dh/H),y1=Math.round((y+1)*dh/H);
+  for(let x=0;x<W;x++){const x0=Math.round(x*dw/W),x1=Math.round((x+1)*dw/W),i=y*W+x;g.fillStyle=fill[i]?rgb(pal[tgt[i]]):'#e9ecf1';g.fillRect(x0,y0,x1-x0,y1-y0)}}
+ return c.toDataURL('image/png');
+}
+function touch(){if(viewing)return;clearTimeout(saveT);saveT=setTimeout(savePainting,1500)} // autosave 1.5 s after the last change
+function flushSave(){clearTimeout(saveT);if(curId&&hist.length&&!viewing)savePainting()}
+async function savePainting(){
+ clearTimeout(saveT);if(!curId||!tgt||!hist.length)return;
+ const n=W*H,done=hist.length===n;
+ const meta={id:curId,name:pName||defName(),W,H,colors:pal.length,pct:Math.round(100*hist.length/n),status:done?'done':'paused',created:createdAt,updated:Date.now(),thumb:thumb()};
+ const data={id:curId,pal,tgt,fill,hist:Uint32Array.from(hist)};
+ try{await dbRun(['meta','data'],'readwrite',(m,d)=>{m.put(meta);d.put(data)});savedMsg='Saved '+fmt(Date.now())}
+ catch(e){savedMsg='Could not save: browser storage is unavailable'}
+ const el=$('#svd');if(el)el.textContent=savedMsg;
+}
+function startPaint(){mode='paint';cur=0;last=-1;cs=Math.min(maxZ(),Math.max(14,Math.min(32,Math.floor(900/W))));baseZ=cs;side();buildPal();draw();after();clearTimeout(saveT)}
+function toSetup(){curId=null;viewing=false;mode='setup';$('#pal').hidden=true;side();if(src)convert();else{$('#stage').hidden=true;$('#empty').hidden=false}}
+async function openPainting(id){
+ const m=galList.find(x=>x.id===id);if(!m)return;let d;
+ try{d=await dbRun(['data'],'readonly',st=>st.get(id))}catch(e){return}
+ if(!d)return;
+ W=m.W;H=m.H;pal=d.pal;tgt=d.tgt;fill=d.fill;hist=Array.from(d.hist);
+ rem=new Array(pal.length).fill(0);for(let i=0;i<W*H;i++)if(!fill[i])rem[tgt[i]]++;
+ curId=id;createdAt=m.created;pName=m.name;savedMsg='';viewing=m.status==='done';
+ $('#gal').style.display='none';startPaint();
+}
+async function delPainting(id){
+ delArm=null;try{await dbRun(['meta','data'],'readwrite',(m,d)=>{m.delete(id);d.delete(id)})}catch(e){}
+ galList=galList.filter(x=>x.id!==id);
+ if(id===curId){curId=null;clearTimeout(saveT);savedMsg='Deleted from the gallery; no longer saving this one';const el=$('#svd');if(el)el.textContent=savedMsg}
+ renderGal();
+}
+function card(m){
+ const done=m.status==='done';
+ return `<div class="card"><img src="${m.thumb}" alt=""><b>${esc(m.name)}</b><small>${m.W}×${m.H}, ${m.colors} colors${done?'':', '+m.pct+'% painted'}<br>${fmt(m.updated)}</small>
+ <div class="row2"><button class="pri" data-a="open" data-id="${m.id}">${done?'View':'Resume'}</button><button data-a="del" data-id="${m.id}">${delArm===m.id?'Sure?':'Delete'}</button></div></div>`;
+}
+function renderGal(err){
+ const np=galList.filter(m=>m.status==='paused').length,nd=galList.length-np,items=galList.filter(m=>m.status===galTab);
+ $('#gbody').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Gallery</h2><button id="gx">Close</button></div>
+ <div class="tools" style="grid-template-columns:1fr 1fr"><button data-t="paused" class="${galTab==='paused'?'on':''}">In progress (${np})</button><button data-t="done" class="${galTab==='done'?'on':''}">Finished (${nd})</button></div>
+ ${err?`<p style="color:var(--mut)">${err}</p>`:items.length?`<div class="cards">${items.map(card).join('')}</div>`:`<p style="color:var(--mut)">${galTab==='done'?'No finished paintings yet.':'No paused paintings. Paintings you start are saved here automatically.'}</p>`}
+ <small style="color:var(--mut)">Paintings are stored in this browser on this device. Clearing the site's data removes them.</small>`;
+}
+async function showGallery(){
+ flushSave();$('#gal').style.display='block';let err='';
+ try{galList=(await dbRun(['meta'],'readonly',st=>st.getAll())).sort((a,b)=>b.updated-a.updated)}catch(e){galList=[];err='Browser storage is unavailable here, so nothing can be saved or listed.'}
+ renderGal(err);
+}
+$('#gb').onclick=showGallery;
+$('#gal').addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.id==='gx'){$('#gal').style.display='none';return}
+ if(b.dataset.t){galTab=b.dataset.t;renderGal();return}
+ const id=b.dataset.id;if(!id)return;
+ if(b.dataset.a==='open')openPainting(id);
+ if(b.dataset.a==='del'){if(delArm!==id){delArm=id;renderGal();setTimeout(()=>{if(delArm===id){delArm=null;renderGal()}},4000);return}delPainting(id)}
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave()});addEventListener('pagehide',flushSave);
 
 /* ---------- finish: image + 10s GIF ---------- */
 function lzw(ix,min){
@@ -369,8 +456,9 @@ function finish(){
  <div class="g"><span>GIF frames per second (1 to 60). GIF files can't play faster than 50 fps, so 50 to 60 all play at 50. Very long, fast GIFs of big images are capped.</span><div class="pair"><input id="gr" type="range" min="1" max="60" step="1" value="${gifFps}"><input id="grn" type="number" min="1" max="60" step="1" value="${gifFps}"></div></div>
  <label class="chk"><input id="gl" type="checkbox" ${gifRel?'checked':''}>Speed follows color amount: common colors play faster, so every color takes about equal time</label>
  <small style="color:var(--mut)">The GIF rebuilds when you release a slider or press Enter in a box. If a save button does nothing in your browser, right-click (or long-press) the picture and choose Save image.</small>
- <div><button class="pri" id="again">Paint another</button></div>`;
- $('#again').onclick=()=>{gifJob++;m.style.display='none';mode='setup';$('#pal').hidden=true;side();convert()};
+ <div style="display:flex;gap:8px"><button class="pri" id="again">Paint another</button><button id="cls">Close</button></div>`;
+ $('#again').onclick=()=>{gifJob++;m.style.display='none';$('#gal').style.display='none';toSetup()};
+ $('#cls').onclick=()=>{gifJob++;m.style.display='none';if(mode==='setup'){curId=null;if(src)convert()}};
  sync('#gs','#gsn',.5,30,1,v=>gifSec=v);sync('#gr','#grn',1,60,0,v=>gifFps=v);
  $('#gl').onchange=e=>{gifRel=e.target.checked;buildGif()};
  $('#lp').onchange=e=>{noLoop=e.target.checked;showGif()};$('#pl').onclick=showGif;
